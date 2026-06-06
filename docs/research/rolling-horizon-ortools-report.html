@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>遙測衛星近即時自動化排程系統深度研究</title>
+<style>
+  /* ── 基礎 Reset ─────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── TASA 設計語彙變數 ──────────────────────────────────── */
+  :root {
+    --bg:          #FFFFFF;
+    --navy:        #002A54;
+    --navy-light:  #0B3C5D;
+    --green:       #1B803E;
+    --green-glow:  rgba(27,128,62,.35);
+    --orange:      #E65C19;
+    --gray:        #546E7A;
+    --gray-light:  #ECEFF1;
+    --yellow:      #FFF9C4;
+    --yellow-bd:   #F9A825;
+    --border:      2px solid var(--navy);
+    --radius:      16px;
+    --mono:        'Consolas', 'Courier New', monospace;
+    --sans:        'Microsoft JhengHei', 'Inter', 'Noto Sans TC', sans-serif;
+  }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--navy);
+    line-height: 1.7;
+  }
+
+  /* ── 軌道裝飾 SVG（右上角） ─────────────────────────────── */
+  .orbital-deco {
+    position: absolute;
+    top: 0; right: 0;
+    width: 420px; height: 420px;
+    opacity: .12;
+    pointer-events: none;
+  }
+
+  /* ── HERO / 封面 ────────────────────────────────────────── */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
+    border-bottom: 3px solid var(--navy);
+    padding: 72px 80px 56px;
+  }
+  .hero-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: .78rem;
+    letter-spacing: .12em;
+    color: var(--green);
+    border: 1px solid var(--green);
+    border-radius: 4px;
+    padding: 2px 10px;
+    margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-size: 2.4rem;
+    font-weight: 900;
+    color: var(--navy);
+    line-height: 1.25;
+    max-width: 640px;
+    margin-bottom: 18px;
+  }
+  .hero-sub {
+    font-size: 1rem;
+    color: var(--gray);
+    max-width: 560px;
+    margin-bottom: 36px;
+  }
+  .hero-meta {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+  .hero-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .hero-meta-item .label {
+    font-family: var(--mono);
+    font-size: .72rem;
+    color: var(--gray);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  .hero-meta-item .value {
+    font-weight: 700;
+    font-size: .95rem;
+    color: var(--navy);
+  }
+
+  /* ── 導覽列 ─────────────────────────────────────────────── */
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--navy);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 80px;
+    height: 48px;
+    overflow-x: auto;
+  }
+  nav a {
+    color: rgba(255,255,255,.7);
+    text-decoration: none;
+    font-size: .82rem;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 6px;
+    white-space: nowrap;
+    transition: background .15s, color .15s;
+  }
+  nav a:hover { background: rgba(255,255,255,.15); color: #fff; }
+
+  /* ── 主內容容器 ─────────────────────────────────────────── */
+  main { max-width: 1080px; margin: 0 auto; padding: 60px 80px 100px; }
+
+  /* ── 章節標題 ───────────────────────────────────────────── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 32px;
+    padding-bottom: 14px;
+    border-bottom: var(--border);
+  }
+  .section-num {
+    font-family: var(--mono);
+    font-size: .82rem;
+    color: var(--gray);
+    min-width: 32px;
+  }
+  .section-header h2 {
+    font-size: 1.55rem;
+    font-weight: 900;
+    color: var(--navy);
+  }
+  section { margin-bottom: 72px; }
+
+  /* ── 卡片 ───────────────────────────────────────────────── */
+  .card {
+    border: var(--border);
+    border-radius: var(--radius);
+    padding: 28px 32px;
+    margin-bottom: 24px;
+    background: var(--bg);
+  }
+  .card-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--navy);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .card p, .card li { font-size: .95rem; color: #1a2b3c; }
+  .card ul, .card ol { padding-left: 20px; }
+  .card li { margin-bottom: 6px; }
+
+  /* ── 狀態藥丸 ───────────────────────────────────────────── */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--mono);
+    font-size: .78rem;
+    font-weight: 700;
+    border-radius: 99px;
+    padding: 3px 12px;
+  }
+  .pill.green  { background: #E8F5E9; color: var(--green); border: 1.5px solid var(--green); }
+  .pill.orange { background: #FBE9E7; color: var(--orange); border: 1.5px solid var(--orange); }
+  .pill.gray   { background: var(--gray-light); color: var(--gray); border: 1.5px solid var(--gray); }
+  .pill.yellow { background: var(--yellow); color: #7b5e00; border: 1.5px solid var(--yellow-bd); }
+  .pill::before { content:''; width:7px; height:7px; border-radius:50%; background:currentColor; }
+
+  /* ── LED 狀態列 ─────────────────────────────────────────── */
+  .status-list { list-style: none; padding: 0; }
+  .status-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid #EEF0F3;
+    font-size: .93rem;
+  }
+  .status-list li:last-child { border-bottom: none; }
+  .led {
+    flex-shrink: 0;
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    margin-top: 4px;
+    background: var(--green);
+    box-shadow: 0 0 6px 2px var(--green-glow);
+  }
+  .led.orange { background: var(--orange); box-shadow: 0 0 6px 2px rgba(230,92,25,.35); }
+  .led.gray   { background: var(--gray);   box-shadow: none; }
+
+  /* ── 程式碼區塊 ─────────────────────────────────────────── */
+  pre {
+    background: #F0F4F8;
+    border-left: 4px solid var(--navy);
+    border-radius: 0 10px 10px 0;
+    padding: 20px 24px;
+    overflow-x: auto;
+    margin: 16px 0;
+    font-family: var(--mono);
+    font-size: .83rem;
+    line-height: 1.65;
+    color: #1a2b3c;
+  }
+  code { font-family: var(--mono); }
+  .kw  { color: #002A54; font-weight: 700; }
+  .fn  { color: #1B803E; }
+  .st  { color: #9C27B0; }
+  .cm  { color: #78909C; font-style: italic; }
+  .nm  { color: #E65C19; }
+
+  /* ── 表格 ───────────────────────────────────────────────── */
+  .tbl-wrap { overflow-x: auto; margin: 16px 0; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .9rem;
+  }
+  th {
+    background: var(--navy);
+    color: #fff;
+    font-weight: 700;
+    padding: 12px 18px;
+    text-align: left;
+    font-size: .85rem;
+    letter-spacing: .04em;
+  }
+  th:first-child { border-radius: 10px 0 0 0; }
+  th:last-child  { border-radius: 0 10px 0 0; }
+  td {
+    padding: 11px 18px;
+    border-bottom: 1px solid #E1E8EF;
+    vertical-align: top;
+    color: #1a2b3c;
+  }
+  tr:nth-child(even) td { background: #F7FAFE; }
+  tr:last-child td { border-bottom: none; }
+  td code { background: #EBF0F6; padding: 1px 6px; border-radius: 4px; }
+
+  /* ── 架構圖 / ASCII 區塊 ────────────────────────────────── */
+  .arch-box {
+    background: #F0F4F8;
+    border: var(--border);
+    border-radius: var(--radius);
+    padding: 28px 32px;
+    font-family: var(--mono);
+    font-size: .82rem;
+    line-height: 1.75;
+    color: var(--navy);
+    overflow-x: auto;
+    margin: 20px 0;
+  }
+
+  /* ── 時間軸/流程列 ──────────────────────────────────────── */
+  .timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 20px 0;
+  }
+  .tl-item {
+    display: flex;
+    gap: 20px;
+    position: relative;
+  }
+  .tl-item::before {
+    content: '';
+    position: absolute;
+    left: 20px;
+    top: 36px;
+    bottom: -8px;
+    width: 2px;
+    background: #D0D9E6;
+  }
+  .tl-item:last-child::before { display: none; }
+  .tl-dot {
+    flex-shrink: 0;
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    background: var(--navy);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: .82rem;
+    font-weight: 700;
+    z-index: 1;
+  }
+  .tl-body {
+    padding: 6px 0 28px;
+    flex: 1;
+  }
+  .tl-body strong { display: block; font-size: 1rem; margin-bottom: 6px; }
+  .tl-body p { font-size: .9rem; color: #3a4e62; }
+
+  /* ── 引用塊 ─────────────────────────────────────────────── */
+  blockquote {
+    border-left: 4px solid var(--green);
+    background: #F1FBF5;
+    padding: 14px 20px;
+    border-radius: 0 10px 10px 0;
+    color: #1a3a2a;
+    font-size: .92rem;
+    margin: 18px 0;
+  }
+
+  /* ── 警示橫幅 ───────────────────────────────────────────── */
+  .alert {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    background: var(--yellow);
+    border: 1.5px solid var(--yellow-bd);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 18px 0;
+    font-size: .9rem;
+    color: #5d4000;
+  }
+  .alert-icon { font-size: 1.3rem; flex-shrink: 0; }
+
+  /* ── 參考文獻 ───────────────────────────────────────────── */
+  .ref-item {
+    display: flex;
+    gap: 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid #EEF0F3;
+    font-size: .88rem;
+  }
+  .ref-item:last-child { border-bottom: none; }
+  .ref-num {
+    font-family: var(--mono);
+    color: var(--gray);
+    min-width: 36px;
+    font-size: .8rem;
+    padding-top: 2px;
+  }
+  .ref-item a { color: var(--navy); text-decoration: underline; }
+  .ref-item a:hover { color: var(--green); }
+
+  /* ── Footer ─────────────────────────────────────────────── */
+  footer {
+    background: var(--navy);
+    color: rgba(255,255,255,.55);
+    text-align: center;
+    padding: 28px;
+    font-size: .8rem;
+    font-family: var(--mono);
+  }
+  footer strong { color: rgba(255,255,255,.9); }
+
+  /* ── 兩欄格線 ───────────────────────────────────────────── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 720px) {
+    main { padding: 32px 20px 80px; }
+    .hero { padding: 48px 20px 40px; }
+    nav { padding: 0 20px; }
+    .grid-2 { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 1.6rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════ HERO ══════════════════════════════ -->
+<header class="hero">
+  <!-- 軌道幾何線條裝飾 -->
+  <svg class="orbital-deco" viewBox="0 0 420 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="210" cy="210" rx="180" ry="70"  stroke="#002A54" stroke-width="1.2" transform="rotate(-30 210 210)"/>
+    <ellipse cx="210" cy="210" rx="150" ry="55"  stroke="#002A54" stroke-width=".9"  transform="rotate(20 210 210)"/>
+    <ellipse cx="210" cy="210" rx="200" ry="85"  stroke="#002A54" stroke-width=".7"  transform="rotate(60 210 210)"/>
+    <circle  cx="210" cy="210" r="6"  fill="#002A54"/>
+    <circle  cx="210" cy="210" r="220" stroke="#002A54" stroke-width=".5" stroke-dasharray="4 6"/>
+    <line x1="210" y1="0"   x2="210" y2="420" stroke="#002A54" stroke-width=".5" stroke-dasharray="3 7"/>
+    <line x1="0"   y1="210" x2="420" y2="210" stroke="#002A54" stroke-width=".5" stroke-dasharray="3 7"/>
+    <!-- 衛星小圖示 -->
+    <g transform="translate(330,80) rotate(45)">
+      <rect x="-6" y="-2" width="12" height="4" fill="#002A54"/>
+      <rect x="-14" y="-1" width="8" height="2" fill="#002A54"/>
+      <rect x="6"  y="-1" width="8" height="2" fill="#002A54"/>
+    </g>
+    <g transform="translate(100,320) rotate(-20)">
+      <rect x="-5" y="-1.5" width="10" height="3" fill="#002A54"/>
+      <rect x="-12" y="-1" width="7" height="2" fill="#002A54"/>
+      <rect x="5"  y="-1" width="7" height="2" fill="#002A54"/>
+    </g>
+  </svg>
+
+  <div class="hero-tag">DEEP RESEARCH REPORT · 2026-06-06</div>
+  <h1>遙測衛星近即時<br>自動化排程系統深度研究</h1>
+  <p class="hero-sub">
+    滾動視界排程器（Rolling Horizon Scheduler）&times; Google OR-Tools CP-SAT 整合架構分析，
+    以及遙測衛星近即時排程系統的設計建議。
+  </p>
+  <div class="hero-meta">
+    <div class="hero-meta-item">
+      <span class="label">核心技術</span>
+      <span class="value">Rolling Horizon + CP-SAT</span>
+    </div>
+    <div class="hero-meta-item">
+      <span class="label">框架</span>
+      <span class="value">APScheduler + OR-Tools + FastAPI</span>
+    </div>
+    <div class="hero-meta-item">
+      <span class="label">文獻來源</span>
+      <span class="value">arXiv / IEEE / ScienceDirect / Google</span>
+    </div>
+    <div class="hero-meta-item">
+      <span class="label">目標延遲</span>
+      <span class="value">&lt; 5 分鐘（enhanced-NRT）</span>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════════════════════════ NAV ════════════════════════════════ -->
+<nav>
+  <a href="#s1">01 · 滾動視界</a>
+  <a href="#s2">02 · OR-Tools CP-SAT</a>
+  <a href="#s3">03 · 整合架構</a>
+  <a href="#s4">04 · 最新研究</a>
+  <a href="#s5">05 · 建議選型</a>
+  <a href="#s6">06 · 參考文獻</a>
+</nav>
+
+<!-- ══════════════════════════════ MAIN ══════════════════════════════ -->
+<main>
+
+<!-- ────────────────── S1 · 滾動視界排程器 ────────────────── -->
+<section id="s1">
+  <div class="section-header">
+    <span class="section-num">01</span>
+    <h2>滾動視界排程器（Rolling Horizon Scheduler）</h2>
+  </div>
+
+  <div class="card">
+    <div class="card-title">💡 核心概念</div>
+    <p>
+      滾動視界（Rolling Horizon, RH）源自控制理論的<strong>模型預測控制（MPC）</strong>。
+      系統不一次排完整個時域，而是只優化「當前視窗」內的任務，執行「鎖定段」後向前滾動，
+      持續重新規劃。此設計讓排程器能即時應對動態任務到達與突發狀況。
+    </p>
+  </div>
+
+  <div class="arch-box">┌─────────────────────────────────────────────────────────────────────┐
+│              完整排程時域（Total Planning Horizon）                   │
+│  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━    │
+│                                                                       │
+│  [== Window 1 ==|LOCK]  ──滾動──▶                                   │
+│        [== Window 2 ==|LOCK]  ──滾動──▶                             │
+│              [== Window 3 ==|LOCK]  ──滾動──▶                       │
+│                                                                       │
+│  每次只優化「當前窗口」，執行「鎖定段（LOCK）」，然後往前推進         │
+└─────────────────────────────────────────────────────────────────────┘</div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>參數</th><th>說明</th><th>衛星典型值</th><th>狀態</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>HORIZON_LENGTH</code></td>
+          <td>每次排程的時間範圍</td>
+          <td>1–2 個軌道週期（90–180 分鐘）</td>
+          <td><span class="pill green">ACTIVE</span></td>
+        </tr>
+        <tr>
+          <td><code>LOCK_WINDOW</code></td>
+          <td>已確定執行、不再重算的前段</td>
+          <td>10–30 分鐘</td>
+          <td><span class="pill green">ACTIVE</span></td>
+        </tr>
+        <tr>
+          <td><code>ROLL_STEP</code></td>
+          <td>每次向前推進的步長</td>
+          <td>等於 LOCK_WINDOW</td>
+          <td><span class="pill green">ACTIVE</span></td>
+        </tr>
+        <tr>
+          <td><code>TRIGGER_MODE</code></td>
+          <td>何時觸發重新排程</td>
+          <td>週期性 + 事件驅動（混合）</td>
+          <td><span class="pill yellow">HYBRID</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">
+        <span class="led"></span>週期觸發（Periodic）
+      </div>
+      <ul class="status-list">
+        <li><span class="led"></span>每 20 分鐘自動執行一次 re-plan</li>
+        <li><span class="led"></span>對應 APScheduler <code>IntervalTrigger</code></li>
+        <li><span class="led"></span>確保計畫持續更新，即使無新事件</li>
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-title">
+        <span class="led orange"></span>事件觸發（Event-Driven）
+      </div>
+      <ul class="status-list">
+        <li><span class="led orange"></span>緊急任務插入：立即重算</li>
+        <li><span class="led orange"></span>雲層遮蔽通報：重新評估可見窗</li>
+        <li><span class="led orange"></span>衛星故障：重分配任務到備用星</li>
+      </ul>
+    </div>
+  </div>
+
+  <blockquote>
+    「在實際場景中，成像任務請求持續不斷地到達，動態排程最顯著的特徵是時間緊迫性——任務必須在
+    指定的可見時窗（VTW）內完成，否則需等待下一軌道週期。」
+    <br><br>— A Dynamic Scheduling Method of EOS by Employing Rolling Horizon Strategy (PMC, 2013)
+  </blockquote>
+</section>
+
+<!-- ────────────────── S2 · Google OR-Tools CP-SAT ────────────────── -->
+<section id="s2">
+  <div class="section-header">
+    <span class="section-num">02</span>
+    <h2>Google OR-Tools CP-SAT 求解器</h2>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔧 OR-Tools 架構與求解器選型</div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>求解器</th><th>適用問題</th><th>衛星排程相關性</th><th>狀態</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>CP-SAT</code></td>
+            <td>約束規劃 + SAT（離散優化）</td>
+            <td>⭐⭐⭐⭐⭐ 最適合時窗 + 不重疊約束</td>
+            <td><span class="pill green">PRIMARY</span></td>
+          </tr>
+          <tr>
+            <td><code>Linear Solver</code></td>
+            <td>線性規劃</td>
+            <td>⭐⭐ 可用於鬆弛問題</td>
+            <td><span class="pill gray">SECONDARY</span></td>
+          </tr>
+          <tr>
+            <td><code>Routing</code></td>
+            <td>車輛路徑 VRP</td>
+            <td>⭐⭐⭐ 多星星座路徑規劃</td>
+            <td><span class="pill gray">OPTIONAL</span></td>
+          </tr>
+          <tr>
+            <td><code>Graph</code></td>
+            <td>最短路徑 / 流量</td>
+            <td>⭐ 輔助工具</td>
+            <td><span class="pill gray">OPTIONAL</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📐 核心概念：區間變數（Interval Variables）</div>
+    <p style="margin-bottom:12px">
+      CP-SAT 的排程建模以 <code>IntervalVar</code> 為核心。每個「觀測任務」對應一個區間變數，
+      內建強制約束：<code>start + duration = end</code>。
+    </p>
+    <pre><span class="kw">from</span> ortools.sat.python <span class="kw">import</span> cp_model
+
+model = cp_model.<span class="fn">CpModel</span>()
+
+<span class="cm"># 每個觀測任務 → 一個 Interval Variable</span>
+start    = model.<span class="fn">new_int_var</span>(t.window_start, t.window_end, <span class="st">f"start_{t.id}"</span>)
+end      = model.<span class="fn">new_int_var</span>(t.window_start, t.window_end, <span class="st">f"end_{t.id}"</span>)
+duration = model.<span class="fn">new_constant</span>(t.obs_seconds)
+
+<span class="cm"># Optional：可選擇不排（搭配布林變數）</span>
+do_it    = model.<span class="fn">new_bool_var</span>(<span class="st">f"x_{t.id}"</span>)
+task     = model.<span class="fn">new_optional_interval_var</span>(
+    start, duration, end, do_it, <span class="st">f"task_{t.id}"</span>
+)</pre>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔒 三大關鍵約束類型</div>
+    <pre><span class="cm"># 1. 不重疊約束：衛星同時只能做一件事</span>
+model.<span class="fn">add_no_overlap</span>([task_1, task_2, task_3 <span class="cm">...所有任務區間</span>])
+
+<span class="cm"># 2. 累計資源約束：記憶體 / 儲存容量上限</span>
+model.<span class="fn">add_cumulative</span>(
+    intervals = all_tasks,
+    demands   = [t.data_mb <span class="kw">for</span> t <span class="kw">in</span> tasks],
+    capacity  = <span class="nm">MAX_ONBOARD_STORAGE_MB</span>
+)
+
+<span class="cm"># 3. 時間窗口約束：只能在衛星可見時執行</span>
+<span class="kw">for</span> i, t <span class="kw">in</span> enumerate(tasks):
+    model.<span class="fn">add</span>(start[i] &gt;= t.vtw_start)   <span class="cm"># VTW = Visibility Time Window</span>
+    model.<span class="fn">add</span>(end[i]   &lt;= t.vtw_end)
+
+<span class="cm"># 目標：最大化優先度加權總和</span>
+model.<span class="fn">maximize</span>(<span class="fn">sum</span>(t.priority * do_it[i] <span class="kw">for</span> i, t <span class="kw">in</span> enumerate(tasks)))</pre>
+  </div>
+
+  <div class="alert">
+    <span class="alert-icon">⚡</span>
+    <div>
+      <strong>Anytime Solver 特性（近即時排程的關鍵）：</strong><br>
+      CP-SAT 設定 <code>max_time_in_seconds = 15.0</code> 後，即使時限到了還沒找到最優解，
+      也會回傳目前找到的<strong>最佳可行解</strong>。這對於需要快速回應的近即時排程極為重要——
+      「夠好的答案現在」勝過「完美的答案太晚」。
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────── S3 · 整合架構 ────────────────── -->
+<section id="s3">
+  <div class="section-header">
+    <span class="section-num">03</span>
+    <h2>系統整合架構：Rolling Horizon × CP-SAT × APScheduler</h2>
+  </div>
+
+  <div class="arch-box">┌──────────────────────────────────────────────────────────────────────┐
+│                  遙測衛星近即時自動化排程系統                          │
+│                                                                        │
+│  ┌────────────┐   任務請求    ┌──────────────────┐                    │
+│  │  FastAPI   │ ──────────▶  │  RollingHorizon  │                    │
+│  │  REST API  │              │  Controller      │                    │
+│  └────────────┘              │  (APScheduler)   │                    │
+│                              └────────┬─────────┘                    │
+│  ┌────────────┐   VTW 窗口    │         │ 每20分鐘 / 緊急插入         │
+│  │  SGP4      │ ──────────▶  │         ▼                             │
+│  │  軌道預報  │              ┌──────────────────┐                    │
+│  └────────────┘              │  CP-SAT Solver   │                    │
+│                              │  (OR-Tools)      │                    │
+│  ┌────────────┐              │  max_time=15s    │                    │
+│  │  SQLite DB │ ◀─────────── └────────┬─────────┘                    │
+│  │  任務狀態  │    排程結果           │                               │
+│  └────────────┘                       ▼                              │
+│                              ┌──────────────────┐                    │
+│                              │  指令上鏈序列     │ ──▶ 衛星           │
+│                              │  下鏈排程計畫     │ ◀── 地面站         │
+│                              └──────────────────┘                    │
+└──────────────────────────────────────────────────────────────────────┘</div>
+
+  <div class="card">
+    <div class="card-title">🐍 Python 核心整合程式碼</div>
+    <pre><span class="cm"># src/rolling_horizon.py</span>
+
+<span class="kw">from</span> apscheduler.schedulers.background <span class="kw">import</span> BackgroundScheduler
+<span class="kw">from</span> ortools.sat.python <span class="kw">import</span> cp_model
+<span class="kw">from</span> datetime <span class="kw">import</span> datetime, timedelta, timezone
+<span class="kw">import</span> threading
+
+<span class="nm">UTC</span> = timezone.utc
+
+<span class="kw">class</span> <span class="fn">RollingHorizonScheduler</span>:
+    <span class="st">"""滾動視界排程器：APScheduler 驅動 + OR-Tools CP-SAT 優化"""</span>
+
+    <span class="nm">HORIZON_MIN</span>  = <span class="nm">120</span>   <span class="cm"># 看未來 2 小時</span>
+    <span class="nm">LOCK_MIN</span>     = <span class="nm">20</span>    <span class="cm"># 鎖定最近 20 分鐘</span>
+    <span class="nm">ROLL_INTERVAL</span>= <span class="nm">20</span>    <span class="cm"># 每 20 分鐘滾動</span>
+    <span class="nm">SOLVER_SEC</span>   = <span class="nm">15.0</span>  <span class="cm"># CP-SAT 時限</span>
+
+    <span class="kw">def</span> <span class="fn">__init__</span>(self):
+        self._sched  = BackgroundScheduler()
+        self._lock   = threading.Lock()
+        self._queue  = []    <span class="cm"># 待排任務佇列</span>
+        self._plan   = []    <span class="cm"># 當前排程計畫</span>
+
+    <span class="kw">def</span> <span class="fn">start</span>(self):
+        <span class="cm"># 週期觸發：每 ROLL_INTERVAL 分鐘滾動一次</span>
+        self._sched.add_job(
+            self._replan,
+            trigger   = <span class="st">"interval"</span>,
+            minutes   = self.<span class="nm">ROLL_INTERVAL</span>,
+            id        = <span class="st">"rolling_replan"</span>,
+            coalesce  = <span class="nm">True</span>,     <span class="cm"># 錯過的不補跑</span>
+            max_instances = <span class="nm">1</span>,   <span class="cm"># 防重疊</span>
+        )
+        self._sched.start()
+
+    <span class="kw">def</span> <span class="fn">insert_urgent</span>(self, task):
+        <span class="st">"""事件觸發：緊急任務插入，立即重算"""</span>
+        self._queue.append(task)
+        self._sched.modify_job(
+            <span class="st">"rolling_replan"</span>,
+            next_run_time = datetime.now(<span class="nm">UTC</span>)  <span class="cm"># 跳過等待</span>
+        )
+
+    <span class="kw">def</span> <span class="fn">_replan</span>(self):
+        now  = datetime.now(<span class="nm">UTC</span>)
+        end  = now + timedelta(minutes=self.<span class="nm">HORIZON_MIN</span>)
+        lock = now + timedelta(minutes=self.<span class="nm">LOCK_MIN</span>)
+        <span class="cm"># 取出鎖定段之後的待排任務</span>
+        pending = [t <span class="kw">for</span> t <span class="kw">in</span> self._queue <span class="kw">if</span> t.deadline &gt; lock]
+        <span class="kw">with</span> self._lock:
+            self._plan = self._solve(pending)
+
+    <span class="kw">def</span> <span class="fn">_solve</span>(self, tasks) -&gt; list:
+        model  = cp_model.<span class="fn">CpModel</span>()
+        solver = cp_model.<span class="fn">CpSolver</span>()
+        solver.parameters.max_time_in_seconds = self.<span class="nm">SOLVER_SEC</span>
+        <span class="cm"># ... 建立 Interval Var、NoOverlap、Cumulative 約束 ...</span>
+        status = solver.solve(model)
+        <span class="kw">return</span> self.<span class="fn">_extract</span>(solver, status, tasks)</pre>
+  </div>
+</section>
+
+<!-- ────────────────── S4 · 最新研究 ────────────────── -->
+<section id="s4">
+  <div class="section-header">
+    <span class="section-num">04</span>
+    <h2>最新研究動態（2024–2025）</h2>
+  </div>
+
+  <div class="timeline">
+    <div class="tl-item">
+      <div class="tl-dot">25</div>
+      <div class="tl-body">
+        <strong>arXiv 2506.11556 — 星上處理 + 即時監控排程（2025-06-13）</strong>
+        <p>
+          整合星上數據處理的敏捷衛星排程新框架。定義<strong>優先度指標</strong>（監控頻率 × 解析度），
+          採用建構式啟發法 + Local Search。實驗結果：解析度平均提升 <span class="pill green">+10%</span>，
+          監控頻率變異降低 <span class="pill green">-83%</span>。
+        </p>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot">25</div>
+      <div class="tl-body">
+        <strong>CP 2025 (LIPIcs) — CP + Local Search 求解 AEOSSP</strong>
+        <p>
+          使用 OR-Tools CP-SAT 作為 anytime solver（上限 20 秒），搭配 Local Search 策略。
+          CP-SAT 被用於求解 TSP with Time Windows 子問題，當貪婪插入失敗時啟動精確求解。
+          適用於 20 顆以上敏捷衛星星座。
+        </p>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot">25</div>
+      <div class="tl-body">
+        <strong>ScienceDirect 2025 — RH-MAPPO 分散式衛星動態排程</strong>
+        <p>
+          滾動視界 + 多智能體強化學習（MAPPO）。RH 調整策略能即時適應任務優先度變化與資源限制，
+          圖注意力網路（GAT）加速可行排程策略學習，適合多星分散式協作場景。
+        </p>
+      </div>
+    </div>
+    <div class="tl-item">
+      <div class="tl-dot">25</div>
+      <div class="tl-body">
+        <strong>arXiv 2604.13283 — 未知約束主動學習（2025-04）</strong>
+        <p>
+          面對衛星操作約束不完整已知的問題，採用主動約束學習（Active Constraint Acquisition）
+          方法，讓排程器在執行中自動推斷隱含約束，逐步提升排程品質。
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ────────────────── S5 · 建議選型 ────────────────── -->
+<section id="s5">
+  <div class="section-header">
+    <span class="section-num">05</span>
+    <h2>本專案技術選型建議</h2>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr><th>功能層</th><th>原選型</th><th>建議升級</th><th>理由</th><th>狀態</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>任務調度框架</td>
+          <td><code>APScheduler</code></td>
+          <td><code>APScheduler</code> ✅ 保留</td>
+          <td>驅動滾動視界的定時器 + 事件觸發</td>
+          <td><span class="pill green">DONE</span></td>
+        </tr>
+        <tr>
+          <td>最佳化引擎</td>
+          <td>❌ 無</td>
+          <td><code>ortools</code> CP-SAT</td>
+          <td>窗口內找最佳排程；anytime solver</td>
+          <td><span class="pill orange">TODO</span></td>
+        </tr>
+        <tr>
+          <td>軌道計算</td>
+          <td>❌ 無</td>
+          <td><code>sgp4</code> + <code>skyfield</code></td>
+          <td>計算衛星可見時窗（VTW）</td>
+          <td><span class="pill orange">TODO</span></td>
+        </tr>
+        <tr>
+          <td>排程策略</td>
+          <td>純事件驅動</td>
+          <td>滾動視界混合觸發</td>
+          <td>兼顧週期重規劃 + 緊急插單</td>
+          <td><span class="pill orange">TODO</span></td>
+        </tr>
+        <tr>
+          <td>API 框架</td>
+          <td><code>FastAPI</code></td>
+          <td><code>FastAPI</code> ✅ 保留</td>
+          <td>REST 任務請求介面</td>
+          <td><span class="pill green">DONE</span></td>
+        </tr>
+        <tr>
+          <td>持久化</td>
+          <td><code>SQLite</code></td>
+          <td><code>SQLite</code> ✅ 保留</td>
+          <td>輕量、跨重啟保留 job 狀態</td>
+          <td><span class="pill green">DONE</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card" style="margin-top:28px">
+    <div class="card-title">📦 安裝依賴</div>
+    <pre><span class="cm"># 新增至 requirements.txt</span>
+ortools>=9.10      <span class="cm"># Google OR-Tools（含 CP-SAT）</span>
+sgp4>=2.23         <span class="cm"># 衛星軌道預報（Two-Line Element）</span>
+skyfield>=1.49     <span class="cm"># 天文計算：地面站可見時窗</span></pre>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🗺️ 開發路徑圖</div>
+    <ul class="status-list">
+      <li>
+        <span class="led"></span>
+        <div><strong>Phase 1（已完成）</strong>：APScheduler + FastAPI + SQLite 排程骨架、
+        REST API（cron / interval / manual trigger）、5 個 pytest 測試</div>
+      </li>
+      <li>
+        <span class="led orange"></span>
+        <div><strong>Phase 2（下一步）</strong>：整合 SGP4 計算 VTW、實作 CP-SAT 排程引擎、
+        Rolling Horizon Controller、衛星指令格式（CCSDS）</div>
+      </li>
+      <li>
+        <span class="led gray"></span>
+        <div><strong>Phase 3（近即時優化）</strong>：混合觸發機制、緊急任務插單、
+        多星星座協調、SNUGS / AWS Ground Station 介面整合</div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ────────────────── S6 · 參考文獻 ────────────────── -->
+<section id="s6">
+  <div class="section-header">
+    <span class="section-num">06</span>
+    <h2>參考文獻</h2>
+  </div>
+
+  <div class="ref-item">
+    <span class="ref-num">[01]</span>
+    <div>A Dynamic Scheduling Method of Earth-Observing Satellites by Employing Rolling Horizon Strategy.
+    <em>Sensors, MDPI / PMC</em>, 2013.<br>
+    <a href="https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3654287/" target="_blank">
+      https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3654287/</a></div>
+  </div>
+  <div class="ref-item">
+    <span class="ref-num">[02]</span>
+    <div>Scheduling Agile Earth Observation Satellites with Onboard Processing and Real-Time Monitoring.
+    <em>arXiv:2506.11556</em>, June 2025.<br>
+    <a href="https://arxiv.org/abs/2506.11556" target="_blank">https://arxiv.org/abs/2506.11556</a></div>
+  </div>
+  <div class="ref-item">
+    <span class="ref-num">[03]</span>
+    <div>Dynamic task scheduling optimization by rolling horizon deep reinforcement learning for distributed satellite system.
+    <em>Expert Systems with Applications, ScienceDirect</em>, 2025.<br>
+    <a href="https://www.sciencedirect.com/science/article/abs/pii/S0957417425019694" target="_blank">
+      https://www.sciencedirect.com/science/article/abs/pii/S0957417425019694</a></div>
+  </div>
+  <div class="ref-item">
+    <span class="ref-num">[04]</span>
+    <div>Solving the Agile Earth Observation Satellite Scheduling Problem with CP and Local Search.
+    <em>LIPIcs, CP 2025</em>.<br>
+    <a href="https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2025.3" target="_blank">
+      https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.CP.2025.3</a></div>
+  </div>
+  <div class="ref-item">
+    <span class="ref-num">[05]</span>
+    <div>Optimizing Earth Observation Satellite Schedules under Unknown Operational Constraints.
+    <em>arXiv:2604.13283</em>, April 2025.<br>
+    <a href="https://arxiv.org/abs/2604.13283" target="_blank">https://arxiv.org/abs/2604.13283</a></div>
+  </div>
+  <div class="ref-item">
+    <span class="ref-num">[06]</span>
+    <div>Google OR-Tools — Scheduling Overview.<br>
+    <a href="https://developers.google.com/optimization/scheduling" target="_blank">
+      https://developers.google.com/optimization/scheduling</a></div>
+  </div>
+  <div class="ref-item">
+    <span class="ref-num">[07]</span>
+    <div>The CP-SAT Primer — Using and Understanding Google OR-Tools' CP-SAT Solver.<br>
+    <a href="https://d-krupke.github.io/cpsat-primer/" target="_blank">
+      https://d-krupke.github.io/cpsat-primer/</a></div>
+  </div>
+  <div class="ref-item">
+    <span class="ref-num">[08]</span>
+    <div>OR-Tools Scheduling Documentation (GitHub stable branch).<br>
+    <a href="https://github.com/google/or-tools/blob/stable/ortools/sat/docs/scheduling.md" target="_blank">
+      https://github.com/google/or-tools/blob/stable/ortools/sat/docs/scheduling.md</a></div>
+  </div>
+
+</section>
+</main>
+
+<footer>
+  <strong>遙測衛星近即時自動化排程系統深度研究</strong> &nbsp;|&nbsp;
+  near-realtime-scheduling &nbsp;|&nbsp;
+  kevinchang0531 &nbsp;|&nbsp; 2026-06-06
+</footer>
+
+</body>
+</html>
