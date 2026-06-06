@@ -1,0 +1,91 @@
+# 福衛八號近即時遙測取像與資料下鏈排程系統規劃
+
+## Summary
+
+建立一套高度整合 `IPS-SOCS-衛星-地面站-XDS` 的端對端排程系統，第一期採 **人審後上傳** 模式：系統每輪自動產生取像與下鏈整合排程、MPQ/TTQ 與操作指令建議，操作員核准後送入 SOCS/地面站流程。
+
+核心目標：
+- 可調式排程週期，最快 `<= 1 小時`。
+- 每輪使用最後更新時間 `<= 1 小時` 的全球氣象資料。
+- 每輪產出涵蓋 `拍攝目標 / TT&C 地面站 / 衛星 / SSR 檔案管理 / XDS / 地面接收站` 的整合排程。
+- 支援每顆衛星每軌更新取像排程，目標能力為每軌最多 10 個取像目標、每日最多約 150 點，但實際以 `agility / power / memory / downlink` 約束為準。
+- 地面站資源異動時可局部重排，避免整批計畫失效。
+
+## Key Architecture
+
+系統分成 7 個主要子系統：
+
+1. **任務需求與 IPS 介接**
+   - 從 IPS 接收 AOI、優先級、deadline、解析度/感測器模式、雲量門檻、交付 SLA。
+   - 每筆任務必須有狀態：`待排程 / 可排 / 已排 / 不可行 / 被擠出 / 待人工核准 / 已送 SOCS / 已執行 / 已下鏈 / 已交付`。
+   - 系統要保留不可行原因，例如雲量過高、無可視窗口、SSR 不足、無地面站可上傳、下鏈無法滿足 SLA。
+
+2. **近即時氣象與可取像窗口**
+   - 每輪排程前先確認全球氣象資料更新時間 `<= 1 小時`。
+   - 對每個 AOI 產生候選取像窗口，加入雲量、太陽高度角、入射角、衛星姿態角、模式切換時間。
+   - 氣象資料逾期時不可靜默排程，必須標示 degraded mode，並要求人工確認。
+
+3. **衛星與星上資源模型**
+   - 對每顆 FS8 衛星維護 orbit、attitude slew、power、thermal、payload mode、SSR capacity、SSR file queue、health status。
+   - 每個候選取像任務都要估算：取像時間、姿態機動成本、電力成本、資料量、SSR 檔案數、最早可下鏈時間。
+   - 第一版先做保守約束排程，不追求理論最大取像數。
+
+4. **TT&C 與地面站動態資源**
+   - 維護可用 TT&C 站、地面接收站、XDS、天線、頻段、通聯窗口、維護封鎖、任務優先權。
+   - 排程結果必須同時檢查：MPQ/TTQ 是否能在衛星執行前透過可用 TT&C pass 上傳，影像資料是否能在 deadline 前透過 XDS/接收站下鏈。
+   - 地面站故障、pass 取消或容量變更時，只重排受影響衛星與時間窗，避免全星系全日重算。
+
+5. **整合排程引擎**
+   - 排程目標採固定優先序：安全約束 > 指令可上傳 > 高優先任務 > deadline/SLA > SSR 不溢位 > 地面站利用率 > 取像數最大化。
+   - 第一版演算法採「規則式可行性檢查 + 啟發式排序 + 局部重排」；後續再導入 OR-Tools CP-SAT 或 MILP。
+   - 每輪輸出三種結果：推薦排程、被拒任務與原因、替代方案。
+
+6. **MPQ/TTQ 與 SOCS 操作封裝**
+   - 系統產出 SOCS 可接收的操作包：取像 timeline、TT&C upload window、SSR file plan、XDS/downlink plan、操作風險標記。
+   - 第一版不直接自動上傳衛星；必須經操作員核准。
+   - 每個操作包需有版本號、產生時間、氣象資料時間、使用的軌道資料版本、核准者、送出時間。
+
+7. **操作員工作台**
+   - 主畫面顯示星系時間軸：衛星軌道、取像任務、TT&C pass、XDS/downlink pass、SSR 水位。
+   - 操作員可以人工鎖定任務、排除地面站、調整優先級、接受替代方案、核准或退回排程。
+   - 系統必須能解釋每個決策：為何排入、為何延後、為何被擠出。
+
+## Interfaces And Data Contracts
+
+第一期至少定義這些介面：
+
+- `MissionRequest`
+  - `mission_id, AOI, priority, deadline, cloud_threshold, sensor_mode, required_resolution, delivery_sla, requester, security_tag`
+- `WeatherSnapshot`
+  - `source, update_time, AOI_cloud_score, confidence, valid_until`
+- `SatelliteState`
+  - `satellite_id, orbit_version, health, power_margin, SSR_free, payload_status, maneuver_limits`
+- `GroundResourceWindow`
+  - `station_id, type(TT&C/XDS/receiver), satellite_id, AOS, LOS, data_rate, command_upload_allowed, maintenance_lock`
+- `SchedulePlan`
+  - `plan_id, cycle_time, weather_time, satellite_id, imaging_tasks, TTQ_upload_plan, SSR_file_plan, downlink_plan, risk_flags`
+- `SOCSPackage`
+  - `plan_id, satellite_id, MPQ, TTQ, command_timeline, validation_report, approval_status`
+
+所有介面都要支援 dry-run 與正式版兩種模式。正式版送 SOCS 前必須通過 validation report。
+
+## Test Plan
+
+驗收測試以任務情境為主：
+
+- **基本閉環**：輸入 AOI 任務後，系統能產生取像時間、TT&C 上傳窗口、SSR 檔案配置、XDS 下鏈窗口與預估交付時間。
+- **氣象有效性**：氣象資料超過 1 小時未更新時，排程標示 degraded mode 並阻擋自動核准。
+- **每軌重排**：新增高優先任務後，系統能在下一輪排程中局部重排同軌任務。
+- **SSR 壓力**：模擬連續取像但下鏈不足，系統必須避免 SSR 溢位並說明被拒任務。
+- **地面站故障**：移除一個 TT&C 或 XDS pass，系統能改用替代地面站或標示不可行。
+- **人工核准**：未核准的 MPQ/TTQ 不可送入 SOCS；核准後版本不可被靜默覆蓋。
+- **效能測試**：以全星系 24 小時任務池測試，單輪排程計算時間需小於設定週期的 20%。
+
+## Assumptions
+
+- 第一版交付物是「系統設計書」等級，不直接實作。
+- 第一版採「人審後上傳」，不是全自動飛行操作。
+- 第一版範圍包含取像與下鏈整合排程，不只做取像排程。
+- `IPS/SOCS/XDS/MPQ/TTQ` 的實際檔案格式與 API 尚未提供，因此規劃以抽象資料契約描述；實作前需補齊既有系統 ICD。
+- 福衛八號每軌 10 點、每日 150 點視為目標能力，不作為硬性保證；實際排程以衛星設計與即時狀態約束為準。
+- 參考公開資料包含 TASA 福衛八號任務介紹、福衛二/五取像任務流程公開文章，以及前一輪整理的 Airbus Pléiades Neo / OneAtlas 類似架構。

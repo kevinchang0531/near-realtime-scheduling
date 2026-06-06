@@ -1,0 +1,64 @@
+# TASA 航太科技感系統流程簡報風格分析與提示詞指南
+*(TASA Aerospace & System Engineering Slide Style Analysis & Prompt Guide)*
+
+本指南旨在解構 TASA（國家太空中心）技術簡報的視覺語彙，並將其轉化為可直接供 AI 簡報生成器、大語言模型（LLM）或設計師使用的**高精度提示詞（Prompts）**與**設計規範**。
+
+---
+
+## 一、 核心視覺風格深度解析 (Visual DNA)
+
+### 1. 配色特徵 (Functional Color Palette) - 遵循 60-30-10 規則
+這套投影片的配色並非單純為了美觀，而是具有強烈的**「功能指示性」**（狀態指示）：
+*   **主色 (60% - 背景與主體):** 純白 (`#FFFFFF`)。極簡、乾淨，確保圖表與流程高度易讀。
+*   **輔色 (30% - 文字與框架):** 太空深藍/海軍藍 (`#002060` 或 `#0B3C5D`)。用於主標題、副標題、卡片邊框、流程線條，傳遞權威、嚴謹與科技感。
+*   **點綴色 (10% - 狀態語意):**
+    *   **啟動/正確/啟動狀態 (Active/Success):** 飽和度高的**科技綠** (`#1B803E` / `#2E7D32`)。
+    *   **異常/終止/點火狀態 (Aborted/Action):** 警示性強的**活力橘** (`#E65C19` / `#EF6C00`)。
+    *   **未啟用/關閉狀態 (Inactive/Disable):** 中性的**鋼鐵灰** (`#546E7A` / `#78909C`)。
+    *   **等待/延遲區間 (Delay/Wait):** 柔和的**淡黃色** (`#FFF9C4` / `#FFF59D`) 作為流程過渡帶。
+
+### 2. 字型語彙 (Typography)
+*   **標題與中文:** 使用無襯線體（Sans-Serif），如 **微軟正黑體 (Microsoft JhengHei)** 或 **思源黑體 (Source Han Sans)**。字重極粗，結構方正、現代。
+*   **系統變數/程式碼 (Variables/Code):** 針對 `GPS_FUNC`、`NM_TRANS_OFF` 等技術專有名詞，嚴格採用**等寬字型 (Monospace)**，如 `Consolas`、`Courier New` 或 `SF Mono`，營造濃厚的終端機/編程氛圍。
+
+### 3. 版面佈局與裝飾元素 (Layout & Decoration)
+*   **封面裝飾:** 右側配置極細的**灰色幾何軌道線條（Orbital Lines / Geometric Vectors）**，象徵衛星軌道、星圖或幾何精密計算。
+*   **卡片設計:** 使用大圓角（`border-radius: 12px~24px`）的粗框卡片，邊框為深藍色，內部文字整齊居中。
+*   **流程與邏輯圖:** 捨棄複雜的三維圖表，完全採用扁平化、二維（2D）的狀態轉移圖（State Transition Diagram）與流程圖（Flowchart）。
+*   **狀態指示燈:** 使用圓形綠色 LED 燈泡效果，邊緣帶有微弱的發光漸層（Glow Effect），代表系統運作正常。
+
+---
+
+## 二、 簡報生成 AI 提示詞 (Universal AI Presentation Prompt)
+
+您可以複製以下精心調校的**結構化提示詞**，輸入至 Claude、GPT-4o 或 Gamma 等支援 Markdown/代碼/詳細指令的簡報工具中：
+
+```text
+Role: You are an expert Presentation Designer specializing in system engineering and aerospace technical slide decks. 
+
+Your goal is to generate a slide deck with the exact visual style of the "TASA Technical Flow Guide" based on the provided content.
+
+### VISUAL DESIGN SYSTEM:
+1. Color Palette:
+   - Background: Pure white (#FFFFFF)
+   - Primary/Headers: Deep Space Navy Blue (#002A54)
+   - Accent - Active/Success/True: Tech Green (#1B803E)
+   - Accent - Error/Abort/Fire: Warning Orange (#E65C19)
+   - Accent - Inactive/False: Neutral Slate Gray (#546E7A)
+   - Accent - Transition/Wait: Soft Pastel Yellow (#FFF9C4)
+2. Typography:
+   - Slide Titles & Body: Bold, clean, modern Sans-serif (e.g., Microsoft JhengHei, Inter)
+   - Code, parameters, system states (e.g., FSW_AUTO_NM, TRUE/FALSE): Always render in monospace font (e.g., Consolas, Courier)
+3. Title Slide Layout:
+   - Clean white background.
+   - Left-aligned title in massive, bold Deep Navy.
+   - Right side decorated with ultra-fine, sophisticated light-gray geometric orbital/trajectory vector line art (representing space/satellite orbits).
+4. Content Slides Layout:
+   - Title at the top-left, followed by a thin functional line or directly into the content.
+   - Content must be presented as highly structured, flat vector diagrams, system flowcharts, or cards.
+   - Cards must have prominent rounded corners (large border-radius) with dark navy borders (2px).
+   - Use color-coded status pills: Green for TRUE/ON, Gray for FALSE/OFF, Orange for warning/termination/fire.
+   - List items representing hardware/software sequences must look like terminal status bars with green circular glowing LED indicators on the left.
+5. Absolute Constraints:
+   - NO background images, NO heavy gradients (except for glowing LEDs), NO 3D shapes.
+   - Maximize whitespace. Use precise, professional, and minimal design.
