@@ -643,28 +643,16 @@ model.<span class="fn">maximize</span>(<span class="fn">sum</span>(t.priority * 
     <h2>系統整合架構：Rolling Horizon × CP-SAT × APScheduler</h2>
   </div>
 
-  <div class="arch-box">┌──────────────────────────────────────────────────────────────────────┐
-│                  遙測衛星近即時自動化排程系統                          │
-│                                                                        │
-│  ┌────────────┐   任務請求    ┌──────────────────┐                    │
-│  │  FastAPI   │ ──────────▶  │  RollingHorizon  │                    │
-│  │  REST API  │              │  Controller      │                    │
-│  └────────────┘              │  (APScheduler)   │                    │
-│                              └────────┬─────────┘                    │
-│  ┌────────────┐   VTW 窗口    │         │ 每20分鐘 / 緊急插入         │
-│  │  SGP4      │ ──────────▶  │         ▼                             │
-│  │  軌道預報  │              ┌──────────────────┐                    │
-│  └────────────┘              │  CP-SAT Solver   │                    │
-│                              │  (OR-Tools)      │                    │
-│  ┌────────────┐              │  max_time=15s    │                    │
-│  │  SQLite DB │ ◀─────────── └────────┬─────────┘                    │
-│  │  任務狀態  │    排程結果           │                               │
-│  └────────────┘                       ▼                              │
-│                              ┌──────────────────┐                    │
-│                              │  指令上鏈序列     │ ──▶ 衛星           │
-│                              │  下鏈排程計畫     │ ◀── 地面站         │
-│                              └──────────────────┘                    │
-└──────────────────────────────────────────────────────────────────────┘</div>
+  <figure style="margin:20px 0;">
+    <img
+      src="arch_31_20260606_085706.png"
+      alt="遙測衛星近即時排程系統整體架構圖"
+      style="width:100%;border:2px solid var(--navy);border-radius:var(--radius);display:block;"
+    />
+    <figcaption style="font-family:var(--mono);font-size:.78rem;color:var(--gray);margin-top:8px;text-align:center;">
+      圖 3.1 &nbsp;遙測衛星近即時排程系統整體架構 — FastAPI × Rolling Horizon Controller × CP-SAT Solver
+    </figcaption>
+  </figure>
 
   <div class="card">
     <div class="card-title">🐍 Python 核心整合程式碼</div>
