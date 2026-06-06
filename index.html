@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>遙測衛星近即時排程系統 — 研究文件庫</title>
+<style>
+  :root {
+    --navy: #002A54;
+    --green: #1B803E;
+    --green-glow: rgba(27,128,62,.3);
+    --orange: #E65C19;
+    --gray: #546E7A;
+    --mono: 'Consolas','Courier New',monospace;
+    --sans: 'Microsoft JhengHei','Inter','Noto Sans TC',sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--sans); background: #fff; color: var(--navy); min-height: 100vh; }
+
+  /* ── Hero ── */
+  .hero {
+    position: relative; overflow: hidden;
+    border-bottom: 3px solid var(--navy);
+    padding: 64px 80px 52px;
+  }
+  .orbital-deco {
+    position: absolute; top: 0; right: 0;
+    width: 380px; height: 380px; opacity: .10; pointer-events: none;
+  }
+  .tag {
+    display: inline-block; font-family: var(--mono); font-size: .76rem;
+    letter-spacing: .12em; color: var(--green); border: 1px solid var(--green);
+    border-radius: 4px; padding: 2px 10px; margin-bottom: 18px;
+  }
+  .hero h1 { font-size: 2.2rem; font-weight: 900; line-height: 1.25; max-width: 600px; margin-bottom: 14px; }
+  .hero p  { color: var(--gray); max-width: 520px; font-size: .97rem; line-height: 1.7; }
+
+  /* ── Nav ── */
+  nav {
+    background: var(--navy); display: flex; align-items: center;
+    gap: 4px; padding: 0 80px; height: 46px;
+  }
+  nav a {
+    color: rgba(255,255,255,.7); text-decoration: none; font-size: .82rem;
+    font-weight: 600; padding: 6px 14px; border-radius: 6px; white-space: nowrap;
+  }
+  nav a:hover { background: rgba(255,255,255,.15); color: #fff; }
+
+  /* ── Grid ── */
+  main { max-width: 1080px; margin: 0 auto; padding: 56px 80px 100px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 24px; }
+
+  /* ── Card ── */
+  .card {
+    border: 2px solid var(--navy); border-radius: 16px;
+    padding: 28px 28px 24px; background: #fff;
+    display: flex; flex-direction: column; gap: 12px;
+    transition: box-shadow .2s;
+  }
+  .card:hover { box-shadow: 0 6px 28px rgba(0,42,84,.12); }
+  .card-num {
+    font-family: var(--mono); font-size: .75rem; color: var(--gray);
+    letter-spacing: .1em;
+  }
+  .card h2 { font-size: 1.05rem; font-weight: 800; }
+  .card p  { font-size: .88rem; color: #3a4e62; line-height: 1.65; flex: 1; }
+  .card a.btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--navy); color: #fff; text-decoration: none;
+    font-size: .82rem; font-weight: 700; border-radius: 8px;
+    padding: 8px 18px; align-self: flex-start; margin-top: 4px;
+    transition: background .15s;
+  }
+  .card a.btn:hover { background: #003d7a; }
+  .card a.btn.green { background: var(--green); }
+  .card a.btn.green:hover { background: #145f2e; }
+
+  /* ── LED ── */
+  .led-row { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: .78rem; }
+  .led {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    background: var(--green); box-shadow: 0 0 5px 2px var(--green-glow);
+  }
+  .led.gray { background: var(--gray); box-shadow: none; }
+  .led.orange { background: var(--orange); box-shadow: 0 0 5px 2px rgba(230,92,25,.3); }
+
+  /* ── Stack Info ── */
+  .stack {
+    margin-top: 48px; border: 2px solid var(--navy); border-radius: 16px;
+    padding: 28px 32px;
+  }
+  .stack h3 { font-size: 1.1rem; font-weight: 800; margin-bottom: 18px; }
+  .stack-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 0; border-bottom: 1px solid #E1E8EF; font-size: .9rem;
+  }
+  .stack-row:last-child { border-bottom: none; }
+  .stack-row code {
+    font-family: var(--mono); background: #EBF0F6;
+    padding: 2px 8px; border-radius: 4px; font-size: .83rem;
+  }
+  .stack-label { color: var(--gray); font-size: .82rem; flex: 1; }
+
+  footer {
+    background: var(--navy); color: rgba(255,255,255,.5);
+    text-align: center; padding: 24px; font-size: .78rem; font-family: var(--mono);
+  }
+  footer strong { color: rgba(255,255,255,.9); }
+
+  @media (max-width: 720px) {
+    .hero { padding: 40px 20px 36px; }
+    nav   { padding: 0 20px; }
+    main  { padding: 32px 20px 80px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <svg class="orbital-deco" viewBox="0 0 380 380" fill="none">
+    <ellipse cx="190" cy="190" rx="160" ry="62" stroke="#002A54" stroke-width="1.2" transform="rotate(-30 190 190)"/>
+    <ellipse cx="190" cy="190" rx="130" ry="50" stroke="#002A54" stroke-width=".9"  transform="rotate(20 190 190)"/>
+    <ellipse cx="190" cy="190" rx="180" ry="75" stroke="#002A54" stroke-width=".7"  transform="rotate(60 190 190)"/>
+    <circle  cx="190" cy="190" r="6" fill="#002A54"/>
+    <circle  cx="190" cy="190" r="195" stroke="#002A54" stroke-width=".5" stroke-dasharray="4 6"/>
+    <g transform="translate(300,72) rotate(45)">
+      <rect x="-6" y="-2" width="12" height="4" fill="#002A54"/>
+      <rect x="-14" y="-1" width="8" height="2" fill="#002A54"/>
+      <rect x="6"  y="-1" width="8" height="2" fill="#002A54"/>
+    </g>
+  </svg>
+  <div class="tag">NEAR-REALTIME-SCHEDULING · RESEARCH HUB</div>
+  <h1>遙測衛星<br>近即時排程系統</h1>
+  <p>
+    基於 APScheduler + OR-Tools CP-SAT + Rolling Horizon 架構的
+    遙測衛星近即時自動化排程系統研究文件庫。
+  </p>
+</header>
+
+<nav>
+  <a href="#reports">研究報告</a>
+  <a href="#stack">技術堆疊</a>
+  <a href="https://github.com/kevinchang0531/near-realtime-scheduling" target="_blank">GitHub ↗</a>
+</nav>
+
+<main>
+  <h2 style="font-size:1.3rem;font-weight:900;margin-bottom:28px;padding-bottom:12px;border-bottom:2px solid var(--navy)" id="reports">
+    研究報告
+  </h2>
+
+  <div class="grid">
+
+    <!-- 深度研究報告 -->
+    <div class="card">
+      <div class="card-num">REPORT · 2026-06-06</div>
+      <h2>滾動視界排程器 × Google OR-Tools</h2>
+      <p>
+        遙測衛星近即時自動化排程系統深度研究。涵蓋 Rolling Horizon 架構、
+        CP-SAT 建模、系統整合方案與 2025 最新研究動態。
+      </p>
+      <div class="led-row"><span class="led"></span>HTML 報告 · TASA 航太風格</div>
+      <a class="btn green" href="docs/research/rolling-horizon-ortools-report.html">
+        📄 閱讀報告
+      </a>
+    </div>
+
+    <!-- 主題 01 -->
+    <div class="card">
+      <div class="card-num">TOPIC 01</div>
+      <h2>衛星任務規劃排程系統綜覽</h2>
+      <p>
+        CCSDS 標準架構、商業系統（OneAtlas API、AWS Ground Station）、
+        學術方向（GNN + MCTS、強化學習）、敏捷衛星排程 20 年演化。
+      </p>
+      <div class="led-row"><span class="led"></span>Word 文件 · NotebookLM 研究</div>
+      <a class="btn" href="docs/research/01_衛星任務規劃排程系統綜覽.docx">⬇ 下載 DOCX</a>
+    </div>
+
+    <!-- 主題 02 -->
+    <div class="card">
+      <div class="card-num">TOPIC 02</div>
+      <h2>近即時取像與下鏈排程重點</h2>
+      <p>
+        延遲分解模型、EarthSight 星地協同設計、下鏈排程核心問題、
+        family attribute 兩階段演算法、野火偵測自動化案例。
+      </p>
+      <div class="led-row"><span class="led"></span>Word 文件 · NotebookLM 研究</div>
+      <a class="btn" href="docs/research/02_近即時取像與下鏈排程重點.docx">⬇ 下載 DOCX</a>
+    </div>
+
+    <!-- 主題 03 -->
+    <div class="card">
+      <div class="card-num">TOPIC 03</div>
+      <h2>Pleiades Neo 排程系統</h2>
+      <p>
+        地面段架構、每 25 分鐘更新排程、Skynopy 地面站網絡、
+        量子退火優化（CNES 研究）、OneAtlas API 介面規格。
+      </p>
+      <div class="led-row"><span class="led"></span>Word 文件 · NotebookLM 研究</div>
+      <a class="btn" href="docs/research/03_Pleiades_Neo排程系統.docx">⬇ 下載 DOCX</a>
+    </div>
+
+    <!-- 主題 04 -->
+    <div class="card">
+      <div class="card-num">TOPIC 04</div>
+      <h2>開發近即時衛星排程系統須知</h2>
+      <p>
+        低延遲架構設計原則（UNOOSA）、集中式 vs 分散式架構、
+        Rolling Horizon 規劃策略、星上 vs 地面處理決策。
+      </p>
+      <div class="led-row"><span class="led"></span>Word 文件 · NotebookLM 研究</div>
+      <a class="btn" href="docs/research/04_開發近即時衛星排程系統須知.docx">⬇ 下載 DOCX</a>
+    </div>
+
+    <!-- 主題 05 -->
+    <div class="card">
+      <div class="card-num">TOPIC 05</div>
+      <h2>近即時排程系統規劃與設計</h2>
+      <p>
+        系統架構層次、演算法對比（啟發式 / GA / RL / 量子退火）、
+        多目標優化、coalesce 機制、DynaQUEST 動態多衛星排程。
+      </p>
+      <div class="led-row"><span class="led"></span>Word 文件 · NotebookLM 研究</div>
+      <a class="btn" href="docs/research/05_近即時排程系統規劃與設計.docx">⬇ 下載 DOCX</a>
+    </div>
+
+    <!-- 主題 06 -->
+    <div class="card">
+      <div class="card-num">TOPIC 06</div>
+      <h2>輸入與輸出介面</h2>
+      <p>
+        任務請求 API（JSON/REST）、指令上鏈序列、ESA SCOS 2000 外部介面（CORBA）、
+        SNUGS 開源地面段 API、AWS Ground Station Python SDK。
+      </p>
+      <div class="led-row"><span class="led"></span>Word 文件 · NotebookLM 研究</div>
+      <a class="btn" href="docs/research/06_輸入輸出介面.docx">⬇ 下載 DOCX</a>
+    </div>
+
+    <!-- PPTX 簡報 -->
+    <div class="card">
+      <div class="card-num">PRESENTATION · 20 SLIDES</div>
+      <h2>遙測衛星近即時排程系統簡報</h2>
+      <p>
+        20 頁 PPTX 簡報，涵蓋六大研究主題、EO-ALERT 案例、
+        技術選型建議與三階段開發路徑圖。
+      </p>
+      <div class="led-row"><span class="led orange"></span>PowerPoint · Ocean Gradient 主題</div>
+      <a class="btn" href="docs/research/簡報_遙測衛星近即時排程系統.pptx">⬇ 下載 PPTX</a>
+    </div>
+
+  </div>
+
+  <!-- Tech Stack -->
+  <div class="stack" id="stack">
+    <h3>⚙️ 技術堆疊</h3>
+    <div class="stack-row">
+      <span class="led"></span>
+      <code>APScheduler 3.10</code>
+      <span class="stack-label">任務調度框架 — 混合觸發（cron + interval + 手動）</span>
+    </div>
+    <div class="stack-row">
+      <span class="led orange"></span>
+      <code>OR-Tools CP-SAT</code>
+      <span class="stack-label">優化引擎 — 滾動視界窗口內最佳排程（Anytime Solver）</span>
+    </div>
+    <div class="stack-row">
+      <span class="led orange"></span>
+      <code>sgp4 + skyfield</code>
+      <span class="stack-label">軌道預報 — 計算衛星可見時窗（VTW）</span>
+    </div>
+    <div class="stack-row">
+      <span class="led"></span>
+      <code>FastAPI 0.115</code>
+      <span class="stack-label">REST API — 任務請求介面 / 狀態查詢</span>
+    </div>
+    <div class="stack-row">
+      <span class="led"></span>
+      <code>SQLite + SQLAlchemy 2.0</code>
+      <span class="stack-label">持久化 — 跨重啟保留 Job 狀態</span>
+    </div>
+    <div class="stack-row">
+      <span class="led gray"></span>
+      <code>Python 3.11+</code>
+      <span class="stack-label">語言環境 — type hints / pytest / black + ruff</span>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <strong>near-realtime-scheduling</strong> &nbsp;|&nbsp;
+  kevinchang0531 &nbsp;|&nbsp;
+  <a href="https://github.com/kevinchang0531/near-realtime-scheduling" style="color:rgba(255,255,255,.7)">github.com/kevinchang0531/near-realtime-scheduling</a>
+  &nbsp;|&nbsp; 2026-06-06
+</footer>
+
+</body>
+</html>
