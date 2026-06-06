@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>遙測衛星近即時自動化排程系統 — 系統規劃簡報</title>
+<style>
+  /* ── Reset ──────────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ── TASA 設計語彙 ──────────────────────────────────────── */
+  :root {
+    --bg:         #FFFFFF;
+    --navy:       #002A54;
+    --navy2:      #0B3C5D;
+    --green:      #1B803E;
+    --green-glow: rgba(27,128,62,.35);
+    --orange:     #E65C19;
+    --gray:       #546E7A;
+    --gray-l:     #ECEFF1;
+    --yellow:     #FFF9C4;
+    --yellow-bd:  #F9A825;
+    --line:       #E1E8EF;
+    --mono:       'Consolas','Courier New',monospace;
+    --sans:       'Microsoft JhengHei','Inter','Noto Sans TC',sans-serif;
+  }
+  html,body { height:100%; }
+  body {
+    font-family: var(--sans); background:#0a1622; color: var(--navy);
+    display:flex; align-items:center; justify-content:center; overflow:hidden;
+  }
+
+  /* ── Deck / Slide framework ─────────────────────────────── */
+  .deck {
+    position:relative; width:100vw; height:100vh;
+    max-width:1280px; max-height:720px; aspect-ratio:16/9;
+    background: var(--bg); overflow:hidden;
+    box-shadow:0 0 60px rgba(0,0,0,.6);
+  }
+  .slide {
+    position:absolute; inset:0; padding:48px 64px 64px;
+    opacity:0; visibility:hidden; transition:opacity .35s ease;
+    display:flex; flex-direction:column;
+  }
+  .slide.active { opacity:1; visibility:visible; }
+
+  /* ── 軌道裝飾 ───────────────────────────────────────────── */
+  .orbital-deco { position:absolute; top:-40px; right:-40px; width:340px; height:340px; opacity:.10; pointer-events:none; }
+
+  /* ── Slide header ───────────────────────────────────────── */
+  .s-tag { font-family:var(--mono); font-size:.72rem; letter-spacing:.14em; color:var(--green);
+           border:1px solid var(--green); border-radius:4px; padding:2px 9px; display:inline-block; margin-bottom:14px; }
+  .s-title { font-size:1.9rem; font-weight:900; line-height:1.2; color:var(--navy); }
+  .s-title .accent { color:var(--orange); }
+  .s-sub { color:var(--gray); font-size:.92rem; margin-top:8px; }
+  .s-rule { height:3px; width:64px; background:var(--navy); margin:16px 0 22px; }
+
+  .body { flex:1; min-height:0; }
+
+  /* ── Cover ──────────────────────────────────────────────── */
+  .cover { justify-content:center; }
+  .cover .s-tag { font-size:.8rem; }
+  .cover h1 { font-size:3.1rem; font-weight:900; line-height:1.18; color:var(--navy); }
+  .cover h1 .accent { color:var(--orange); }
+  .cover .lead { color:var(--gray); font-size:1.05rem; margin-top:20px; max-width:640px; line-height:1.7; }
+  .cover .meta { font-family:var(--mono); font-size:.8rem; color:var(--gray); margin-top:34px; letter-spacing:.05em; }
+
+  /* ── Generic helpers ────────────────────────────────────── */
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:18px; height:100%; }
+  .grid3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+  .grid4 { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+
+  .card { border:2px solid var(--navy); border-radius:14px; padding:18px 20px; background:#fff; }
+  .card h3 { font-size:1rem; font-weight:800; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+  .card.green-t { border-color:var(--green); }
+  .card.orange-t { border-color:var(--orange); }
+  .card ul { list-style:none; }
+  .card li { font-size:.84rem; line-height:1.55; color:#33485c; padding-left:16px; position:relative; margin-bottom:5px; }
+  .card li::before { content:'▸'; position:absolute; left:0; color:var(--navy2); }
+
+  /* ── Status pills ───────────────────────────────────────── */
+  .pill { font-family:var(--mono); font-size:.72rem; font-weight:700; padding:2px 9px; border-radius:20px; display:inline-block; }
+  .pill.g { background:#E4F3E9; color:var(--green); }
+  .pill.o { background:#FCEAE0; color:var(--orange); }
+  .pill.y { background:var(--yellow); color:#8d6e00; }
+  .pill.s { background:var(--gray-l); color:var(--gray); }
+
+  /* ── LED rows ───────────────────────────────────────────── */
+  .led { width:10px; height:10px; border-radius:50%; flex-shrink:0; background:var(--green); box-shadow:0 0 5px 2px var(--green-glow); }
+  .led.o { background:var(--orange); box-shadow:0 0 5px 2px rgba(230,92,25,.3); }
+  .led.s { background:var(--gray); box-shadow:none; }
+  .led.y { background:var(--yellow-bd); box-shadow:0 0 5px 2px rgba(249,168,37,.3); }
+
+  /* ── Mono code ──────────────────────────────────────────── */
+  code, .mono { font-family:var(--mono); }
+  .codechip { font-family:var(--mono); background:#EBF0F6; padding:2px 7px; border-radius:4px; font-size:.8rem; }
+
+  /* ── Table ──────────────────────────────────────────────── */
+  table { width:100%; border-collapse:collapse; font-size:.82rem; }
+  th { background:var(--navy); color:#fff; text-align:left; padding:9px 12px; font-weight:700; }
+  td { padding:8px 12px; border-bottom:1px solid var(--line); color:#33485c; vertical-align:top; }
+  tr:nth-child(even) td { background:#F7FAFC; }
+  td .codechip { font-size:.76rem; }
+
+  /* ── Flow (architecture layers) ─────────────────────────── */
+  .layer { border:2px solid var(--navy); border-radius:10px; padding:9px 14px; margin-bottom:9px; background:#fff;
+           display:flex; align-items:center; gap:12px; }
+  .layer .lname { font-weight:800; font-size:.82rem; min-width:118px; color:var(--navy); }
+  .layer .ldesc { font-size:.78rem; color:var(--gray); }
+  .layer.bus { border-color:var(--orange); background:#FFF6F1; }
+  .layer.core { border-color:var(--green); background:#F3FAF5; }
+
+  /* ── Pipeline / workflow steps ──────────────────────────── */
+  .pipe { display:flex; flex-direction:column; gap:8px; }
+  .step { display:flex; align-items:center; gap:14px; border:2px solid var(--navy); border-left:6px solid var(--navy);
+          border-radius:8px; padding:8px 16px; background:#fff; }
+  .step .n { font-family:var(--mono); font-weight:800; color:var(--navy); font-size:.9rem; min-width:24px; }
+  .step .t { font-size:.85rem; color:#2b3f52; }
+  .step.warn { border-color:var(--orange); border-left-color:var(--orange); background:#FFF8F4; }
+  .step.ok { border-color:var(--green); border-left-color:var(--green); background:#F4FBF6; }
+
+  /* ── 3-tier scheduling ──────────────────────────────────── */
+  .tier { border:2px solid var(--navy); border-radius:12px; padding:14px 18px; margin-bottom:12px; position:relative; }
+  .tier h4 { font-size:.95rem; font-weight:800; margin-bottom:5px; }
+  .tier p { font-size:.8rem; color:#33485c; line-height:1.5; }
+  .tier .badge { position:absolute; top:14px; right:16px; }
+  .tier.t1 { border-color:var(--navy); }
+  .tier.t2 { border-color:var(--green); background:#F4FBF6; }
+  .tier.t3 { border-color:var(--orange); background:#FFF8F4; }
+
+  .big-num { font-family:var(--mono); font-size:2.4rem; font-weight:900; color:var(--orange); line-height:1; }
+  .stat { border:2px solid var(--navy); border-radius:14px; padding:18px; text-align:center; }
+  .stat .lbl { font-size:.8rem; color:var(--gray); margin-top:8px; }
+
+  /* ── Navigation ─────────────────────────────────────────── */
+  .nav { position:absolute; bottom:16px; right:24px; display:flex; align-items:center; gap:10px; z-index:20; }
+  .nav button { font-family:var(--mono); font-size:.8rem; border:1.5px solid var(--navy); background:#fff; color:var(--navy);
+                width:34px; height:30px; border-radius:6px; cursor:pointer; font-weight:700; }
+  .nav button:hover { background:var(--navy); color:#fff; }
+  .counter { position:absolute; bottom:18px; left:24px; font-family:var(--mono); font-size:.78rem; color:var(--gray); z-index:20; }
+  .progress { position:absolute; top:0; left:0; height:4px; background:var(--green); transition:width .3s; z-index:30; box-shadow:0 0 8px var(--green-glow); }
+  .brand { position:absolute; bottom:18px; left:50%; transform:translateX(-50%); font-family:var(--mono); font-size:.7rem; color:var(--gray); letter-spacing:.08em; z-index:20; }
+
+  .footnote { font-size:.72rem; color:var(--gray); margin-top:10px; font-family:var(--mono); }
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+  <div class="progress" id="progress"></div>
+
+  <!-- ░░ 1 · COVER ░░ -->
+  <section class="slide cover active">
+    <svg class="orbital-deco" viewBox="0 0 340 340" fill="none">
+      <ellipse cx="170" cy="170" rx="150" ry="58" stroke="#002A54" stroke-width="1.2" transform="rotate(-30 170 170)"/>
+      <ellipse cx="170" cy="170" rx="120" ry="46" stroke="#002A54" stroke-width=".9" transform="rotate(20 170 170)"/>
+      <ellipse cx="170" cy="170" rx="170" ry="70" stroke="#002A54" stroke-width=".7" transform="rotate(60 170 170)"/>
+      <circle cx="170" cy="170" r="6" fill="#002A54"/>
+      <circle cx="170" cy="170" r="172" stroke="#002A54" stroke-width=".5" stroke-dasharray="4 6"/>
+    </svg>
+    <div class="s-tag">NEAR-REALTIME-SCHEDULING · SYSTEM PLAN</div>
+    <h1>遙測衛星<br><span class="accent">近即時</span>自動化排程系統</h1>
+    <p class="lead">針對客戶緊急訂單與動態地面站資源，於分鐘級時間內完成任務重排與指令下達的端到端系統規劃。</p>
+    <p class="meta">系統需求 · SOW · 操作情境 · 系統架構 · 資料介面 · 工作流 · 排程模型</p>
+  </section>
+
+  <!-- ░░ 2 · 問題本質 ░░ -->
+  <section class="slide">
+    <div class="s-tag">CHALLENGE</div>
+    <h1 class="s-title">問題本質：<span class="accent">動態時窗</span>資源指派最佳化</h1>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="grid3" style="margin-bottom:18px;">
+        <div class="card"><h3><span class="led"></span>時間窗約束</h3>
+          <p style="font-size:.84rem;color:#33485c;line-height:1.6;">衛星對目標的可拍窗、對地面站的可通聯窗皆為短暫且固定的天文事件。</p></div>
+        <div class="card orange-t"><h3><span class="led o"></span>資源衝突</h3>
+          <p style="font-size:.84rem;color:#33485c;line-height:1.6;">單衛星同時段只能做一件事；天線、頻段、儲存、電力、姿態機動時間皆有限。</p></div>
+        <div class="card green-t"><h3><span class="led y"></span>不確定性</h3>
+          <p style="font-size:.84rem;color:#33485c;line-height:1.6;">緊急訂單插入、雲量/天氣變化、地面站故障、衛星異常 → 必須滾動重排。</p></div>
+      </div>
+      <div class="card" style="border-color:var(--orange);background:#FFF8F4;">
+        <h3 style="color:var(--orange);">⚡ 「近即時」的明確定義</h3>
+        <p style="font-size:.9rem;color:#33485c;">緊急訂單自接收到產出可執行排程方案 <span class="codechip">≤ 5 分鐘</span>（目標 <span class="codechip">≤ 2 分鐘</span>），透過事件驅動的<strong>增量重排</strong>達成。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ░░ 3 · 系統需求 ░░ -->
+  <section class="slide">
+    <div class="s-tag">REQUIREMENTS</div>
+    <h1 class="s-title">系統需求 — 功能 (FR) 與非功能 (NFR)</h1>
+    <div class="s-rule"></div>
+    <div class="body grid2">
+      <div class="card">
+        <h3><span class="led"></span>功能需求 FR</h3>
+        <ul>
+          <li><code>FR-01</code> 訂單接收／優先級分類（一般·緊急·VIP）</li>
+          <li><code>FR-02</code> 星曆維護與可見窗計算（TLE/SGP4）</li>
+          <li><code>FR-03</code> 地面站資源狀態維護</li>
+          <li><code>FR-04</code> 初始排程產生與可視化</li>
+          <li><code>FR-05</code> <strong>事件觸發式動態增量重排</strong></li>
+          <li><code>FR-06</code> 衝突偵測與優先權搶占</li>
+          <li><code>FR-07</code> 衛星指令 + 地面站 Pass Plan 產出</li>
+          <li><code>FR-08</code> 執行監控、達成率與計費依據</li>
+          <li><code>FR-09</code> What-if 模擬與人工覆核</li>
+        </ul>
+      </div>
+      <div class="card orange-t">
+        <h3><span class="led o"></span>非功能需求 NFR</h3>
+        <ul>
+          <li><strong>效能</strong>：緊急重排 P95 <span class="codechip">≤ 5min</span>；全域排程 <span class="codechip">≤ 60s</span></li>
+          <li><strong>可用性</strong>：核心服務 <span class="codechip">99.9%</span>，HA 無單點故障</li>
+          <li><strong>可擴充</strong>：個位數→數百顆衛星不需重構</li>
+          <li><strong>可追溯</strong>：每筆排入/排除/搶占決策可審計</li>
+          <li><strong>安全</strong>：分級管控 · mTLS · RBAC · 操作日誌</li>
+          <li><strong>時間同步</strong>：全系統 UTC，NTP/PTP</li>
+        </ul>
+        <div style="margin-top:12px;display:flex;gap:6px;flex-wrap:wrap;">
+          <span class="pill g">納入率 ≥ 95%</span>
+          <span class="pill o">利用率 +20%</span>
+          <span class="pill s">衝突 = 0</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ░░ 4 · SOW / WBS ░░ -->
+  <section class="slide">
+    <div class="s-tag">SCOPE OF WORK</div>
+    <h1 class="s-title">工作說明書 (SOW) 與 WBS 階段</h1>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="pipe" style="margin-bottom:14px;">
+        <div class="step"><span class="n">一</span><span class="t"><strong>需求與架構</strong>（4–6 週）— SRS / ICD / SDD</span><span class="pill s" style="margin-left:auto;">Define</span></div>
+        <div class="step"><span class="n">二</span><span class="t"><strong>排程引擎雛型</strong>（8–10 週）— 星曆 / 可見窗計算 + 批次最佳化</span><span class="pill y" style="margin-left:auto;">Build</span></div>
+        <div class="step warn"><span class="n">三</span><span class="t"><strong>動態重排 + 介面整合</strong>（8–12 週）— 滾動重排 · API · 地面站</span><span class="pill o" style="margin-left:auto;">Core</span></div>
+        <div class="step"><span class="n">四</span><span class="t"><strong>系統整測 / 現場驗證 SAT</strong>（6–8 週）</span><span class="pill s" style="margin-left:auto;">Verify</span></div>
+        <div class="step ok"><span class="n">五</span><span class="t"><strong>上線與維運轉移</strong> — 教育訓練 · 維運手冊</span><span class="pill g" style="margin-left:auto;">Deploy</span></div>
+      </div>
+      <div class="card green-t">
+        <h3>✅ 驗收 KPI 門檻</h3>
+        <p style="font-size:.84rem;color:#33485c;">緊急訂單納入率 <span class="codechip">≥95%</span> · 重排延遲 P95 <span class="codechip">≤5min</span> · 資源利用率提升 <span class="codechip">≥20%</span> · 排程衝突 <span class="codechip">=0</span></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ░░ 5 · 操作情境 ░░ -->
+  <section class="slide">
+    <div class="s-tag">OPERATIONAL SCENARIOS</div>
+    <h1 class="s-title">操作情境</h1>
+    <div class="s-rule"></div>
+    <div class="body grid2">
+      <div class="card">
+        <h3><span class="led s"></span>A · 一般訂單（批次）</h3>
+        <p style="font-size:.82rem;color:#33485c;line-height:1.55;">白天下單 → 週期性彙整 → 全域最佳化 → 隔日任務計畫下達。</p>
+      </div>
+      <div class="card orange-t">
+        <h3><span class="led o"></span>B · 緊急訂單插入 <span class="pill o">核心</span></h3>
+        <p style="font-size:.82rem;color:#33485c;line-height:1.55;">災害/突發事件 → 30s 算可見窗 → 增量重排 → 衝突則優先權搶占 → 人工 1-click 覆核 → 下達 → 通知被搶占客戶。</p>
+      </div>
+      <div class="card">
+        <h3><span class="led y"></span>C · 地面站資源異動</h3>
+        <p style="font-size:.82rem;color:#33485c;line-height:1.55;">天線故障/天氣惡化 → 受影響下行任務自動改派他站或順延至下一通聯窗。</p>
+      </div>
+      <div class="card">
+        <h3><span class="led"></span>D · 衛星異常 / 新 TLE</h3>
+        <p style="font-size:.82rem;color:#33485c;line-height:1.55;">新星曆進入 → 重算可見窗 → 受影響任務局部重排。</p>
+        <h3 style="margin-top:12px;"><span class="led"></span>E · What-if 人工介入</h3>
+        <p style="font-size:.82rem;color:#33485c;line-height:1.55;">模擬接受 VIP 訂單對達成率/違約金的影響後核准。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ░░ 6 · 系統架構 ░░ -->
+  <section class="slide">
+    <div class="s-tag">ARCHITECTURE</div>
+    <h1 class="s-title">系統架構 — 事件驅動分層</h1>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="layer"><span class="lname">展示層</span><span class="ldesc">Order Portal · Ops Dashboard · What-if Simulator</span></div>
+      <div class="layer"><span class="lname">API 閘道</span><span class="ldesc">REST / gRPC · AuthN/Z · Rate-limit · mTLS</span></div>
+      <div class="layer core"><span class="lname">排程核心</span><span class="ldesc">可見窗計算 · 批次全域最佳化 · 增量重排器 · 衝突/搶占決策</span></div>
+      <div class="layer"><span class="lname">應用層</span><span class="ldesc">訂單管理 · 資源管理 · 監控/KPI 服務 · 指令產生</span></div>
+      <div class="layer bus"><span class="lname">事件匯流排</span><span class="ldesc">Kafka / NATS — 緊急訂單 · 資源異動 · 天氣事件（近即時骨幹）</span></div>
+      <div class="layer"><span class="lname">資料層</span><span class="ldesc">訂單DB · 星曆/TLE · 資源狀態 · 排程結果 · 日誌</span></div>
+      <div class="layer"><span class="lname">整合層</span><span class="ldesc">TT&amp;C · 地面站網路 (SLE) · 氣象 API · 客戶系統</span></div>
+      <p class="footnote">關鍵設計：雙模排程（背景批次最佳化 + 前景快速增量重排）· 微服務 HA · Digital Twin 模擬環境</p>
+    </div>
+  </section>
+
+  <!-- ░░ 7 · 主要功能模組 ░░ -->
+  <section class="slide">
+    <div class="s-tag">FUNCTIONAL MODULES</div>
+    <h1 class="s-title">主要功能模組</h1>
+    <div class="s-rule"></div>
+    <div class="body">
+      <table>
+        <tr><th>模組</th><th>職責</th><th>關鍵技術</th></tr>
+        <tr><td><strong>訂單管理</strong></td><td>接收 · 優先級分類 · SLA · 計費</td><td><span class="codechip">規則引擎</span> <span class="codechip">優先權佇列</span></td></tr>
+        <tr><td><strong>可見窗引擎</strong></td><td>TLE 維護 · 軌道傳播 · target/station 可見窗 · 雲遮</td><td><span class="codechip">SGP4/SDP4</span> <span class="codechip">幾何遮蔽</span></td></tr>
+        <tr><td><strong>資源管理</strong></td><td>天線/頻段/儲存/電力/姿態預算 · 可用性 · 天氣</td><td><span class="codechip">資源行事曆</span> <span class="codechip">狀態機</span></td></tr>
+        <tr><td><strong>排程核心</strong></td><td>任務↔資源↔時間窗指派最佳化</td><td><span class="codechip">CP-SAT</span> <span class="codechip">ALNS</span></td></tr>
+        <tr><td><strong>動態重排器</strong></td><td>事件觸發的局部/增量重排與搶占</td><td><span class="codechip">Rolling Horizon</span> <span class="codechip">修復式啟發</span></td></tr>
+        <tr><td><strong>衝突管理</strong></td><td>偵測時間/資源/姿態衝突 + 搶占成本</td><td><span class="codechip">約束檢查器</span></td></tr>
+        <tr><td><strong>監控 / KPI</strong></td><td>執行狀態 · 達成率 · 利用率 · SLA 告警</td><td><span class="codechip">TimescaleDB</span> <span class="codechip">Grafana</span></td></tr>
+        <tr><td><strong>指令產生</strong></td><td>衛星 Command Load · 地面站 Pass Plan</td><td><span class="codechip">模板化</span> <span class="codechip">ICD 對應</span></td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- ░░ 8 · 資料交換介面 ░░ -->
+  <section class="slide">
+    <div class="s-tag">INTERFACES · ICD</div>
+    <h1 class="s-title">資料交換介面</h1>
+    <div class="s-rule"></div>
+    <div class="body">
+      <table>
+        <tr><th>介面</th><th>對象</th><th>內容</th><th>格式 / 協定</th></tr>
+        <tr><td><code>I-01</code> 客戶訂單</td><td>客戶系統</td><td>目標座標 · 解析度 · 時效 · 優先級 · SLA</td><td><span class="codechip">REST/JSON · OAuth2/mTLS</span></td></tr>
+        <tr><td><code>I-02</code> 星曆</td><td>TT&amp;C / 第三方</td><td>TLE · 精密星曆</td><td><span class="codechip">TLE · OEM (CCSDS)</span></td></tr>
+        <tr><td><code>I-03</code> 地面站</td><td>地面站網路</td><td>通聯窗請求 · Pass 排程 · 天線狀態</td><td><span class="codechip">gRPC · CCSDS SLE · XTCE</span></td></tr>
+        <tr><td><code>I-04</code> TT&amp;C 指令</td><td>操控中心</td><td>任務指令上行 · 衛星健康</td><td><span class="codechip">CCSDS TC/TM</span></td></tr>
+        <tr><td><code>I-05</code> 氣象</td><td>氣象服務</td><td>雲量 · 能見度預報</td><td><span class="codechip">REST/JSON</span></td></tr>
+        <tr><td><code>I-06</code> 排程輸出</td><td>下游 / 客戶</td><td>任務計畫 · ETA · 交付狀態</td><td><span class="codechip">JSON · iCal</span></td></tr>
+        <tr><td><code>I-07</code> 內部事件</td><td>各微服務</td><td>緊急訂單 · 資源異動事件</td><td><span class="codechip">Kafka / NATS</span></td></tr>
+      </table>
+      <p class="footnote">優先採用 CCSDS / SLE / XTCE 等航太標準，降低與既有地面段整合成本。</p>
+    </div>
+  </section>
+
+  <!-- ░░ 9 · 排程模型（核心） ░░ -->
+  <section class="slide">
+    <div class="s-tag">SCHEDULING MODEL · CORE</div>
+    <h1 class="s-title">排程模型 — <span class="accent">三層混合式</span>策略</h1>
+    <div class="s-rule"></div>
+    <div class="body">
+      <div class="tier t1">
+        <span class="badge pill s">分鐘級 · 離線</span>
+        <h4>① 批次全域最佳化</h4>
+        <p>MILP (CP-SAT/Gurobi) 求小規模最優 · 或 ALNS / 遺傳演算法 / 蟻群求大規模近優 → 產出高品質<strong>基準排程</strong>。</p>
+      </div>
+      <div class="tier t2">
+        <span class="badge pill g">秒級 · 事件觸發</span>
+        <h4>② 動態增量重排</h4>
+        <p>以基準解為起點，<strong>Rolling Horizon 滾動時域 + 修復式插入啟發</strong>，僅在受影響時間窗局部重算 → 達成「近即時」。</p>
+      </div>
+      <div class="tier t3">
+        <span class="badge pill o">毫秒~秒 · 規則</span>
+        <h4>③ 優先權搶占與衝突解決</h4>
+        <p>以「優先權 + 違約成本」貪婪/規則決策，可解釋、可審計；高風險者觸發人工覆核 (Human-in-the-loop)。</p>
+      </div>
+      <p class="footnote">目標函數：max Σ(訂單收益 × 優先權) − 機動成本 − SLA 違約金 − 資源懲罰　｜　進階：RL / 隨機規劃 學習為未來緊急訂單保留資源</p>
+    </div>
+  </section>
+
+  <!-- ░░ 10 · 模型選型理由 ░░ -->
+  <section class="slide">
+    <div class="s-tag">MODEL RATIONALE</div>
+    <h1 class="s-title">為何這樣選模型？</h1>
+    <div class="s-rule"></div>
+    <div class="body">
+      <table>
+        <tr><th>需求</th><th>對應模型</th><th>理由</th></tr>
+        <tr><td>高品質 · 大規模</td><td><span class="codechip">ALNS / GA / 蟻群</span></td><td>數百衛星×數千訂單下 MILP 無法在時限內求解，元啟發式秒~分鐘給近優解</td></tr>
+        <tr><td>嚴格最優 · 小規模</td><td><span class="codechip">MILP / CP-SAT</span></td><td>訂單少時求全域最優，作為基準與驗證</td></tr>
+        <tr><td><strong>近即時動態調整</strong></td><td><span class="codechip">Rolling Horizon + 修復啟發</span></td><td>只重排受影響局部，避免全域重算，滿足分鐘級 SLA</td></tr>
+        <tr><td>緊急搶占</td><td><span class="codechip">優先權規則 + 成本決策</span></td><td>快速、可解釋、可審計</td></tr>
+        <tr><td>不確定性 / 未來彈性</td><td><span class="codechip">強化學習 RL / 隨機規劃</span></td><td>學習「保留資源給未來緊急訂單」策略（Phase 2 增強）</td></tr>
+      </table>
+      <div class="card green-t" style="margin-top:14px;">
+        <p style="font-size:.84rem;color:#33485c;"><strong>務實建議：</strong>MVP 先用 <span class="codechip">OR-Tools CP-SAT</span> 做批次層 + <span class="codechip">貪婪插入/ALNS</span> 做增量層，成本低、可快速驗證；規模上來再引入商用求解器或 RL。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ░░ 11 · 動態重排工作流 ░░ -->
+  <section class="slide">
+    <div class="s-tag">WORKFLOW</div>
+    <h1 class="s-title">動態重排工作流</h1>
+    <div class="s-rule"></div>
+    <div class="body pipe">
+      <div class="step warn"><span class="n">⚡</span><span class="t"><strong>事件匯流排</strong> ◄ 緊急訂單 / 地面站異動 / 天氣 / 新 TLE</span></div>
+      <div class="step"><span class="n">1</span><span class="t">事件分類 &amp; 優先級判定</span></div>
+      <div class="step"><span class="n">2</span><span class="t">計算受影響可見窗（target &amp; station）</span></div>
+      <div class="step ok"><span class="n">3</span><span class="t">增量重排（局部）</span></div>
+      <div class="step warn"><span class="n">4-5</span><span class="t">衝突？ → 優先權搶占評估（收益 vs 違約成本）</span></div>
+      <div class="step"><span class="n">6</span><span class="t">高風險？ → 人工 1-click 覆核</span></div>
+      <div class="step ok"><span class="n">7-8</span><span class="t">產生新方案 → 產出指令 &amp; Pass Plan → 下達 TT&amp;C / 地面站</span></div>
+      <div class="step"><span class="n">9</span><span class="t">執行監控 &amp; 回饋 · KPI/SLA/計費 · 通知被搶占客戶</span></div>
+    </div>
+  </section>
+
+  <!-- ░░ 12 · 技術選型 ░░ -->
+  <section class="slide">
+    <div class="s-tag">TECH STACK · MVP</div>
+    <h1 class="s-title">技術選型建議</h1>
+    <div class="s-rule"></div>
+    <div class="body grid2">
+      <div class="card">
+        <h3><span class="led"></span>排程 &amp; 軌道</h3>
+        <ul>
+          <li>求解：<span class="codechip">Google OR-Tools CP-SAT</span> + 自製 ALNS</li>
+          <li>軌道：<span class="codechip">python-sgp4 / Skyfield / Orekit</span></li>
+        </ul>
+        <h3 style="margin-top:14px;"><span class="led o"></span>事件 &amp; 後端</h3>
+        <ul>
+          <li>匯流排：<span class="codechip">Kafka / NATS</span></li>
+          <li>後端：<span class="codechip">Python (排程) + Go/Java (API)</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="led"></span>資料 &amp; 介面</h3>
+        <ul>
+          <li>DB：<span class="codechip">PostgreSQL + Redis + TimescaleDB</span></li>
+          <li>標準：<span class="codechip">CCSDS SLE · XTCE · OEM</span></li>
+        </ul>
+        <h3 style="margin-top:14px;"><span class="led y"></span>部署 &amp; 監控</h3>
+        <ul>
+          <li>部署：<span class="codechip">Kubernetes HA</span>（Sim + Prod 雙環境）</li>
+          <li>監控：<span class="codechip">Prometheus + Grafana</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ░░ 13 · 下一步 ░░ -->
+  <section class="slide cover">
+    <svg class="orbital-deco" viewBox="0 0 340 340" fill="none">
+      <ellipse cx="170" cy="170" rx="150" ry="58" stroke="#002A54" stroke-width="1.2" transform="rotate(-30 170 170)"/>
+      <ellipse cx="170" cy="170" rx="120" ry="46" stroke="#002A54" stroke-width=".9" transform="rotate(20 170 170)"/>
+      <circle cx="170" cy="170" r="6" fill="#002A54"/>
+    </svg>
+    <div class="s-tag">NEXT STEPS</div>
+    <h1 style="font-size:2.4rem;">建議的<span class="accent">下一步</span></h1>
+    <div class="grid4" style="margin-top:28px;max-width:1000px;">
+      <div class="stat"><div class="big-num">01</div><div class="lbl">SRS / SOW<br>正式文件</div></div>
+      <div class="stat"><div class="big-num" style="color:var(--green);">02</div><div class="lbl">架構 / 工作流<br>提案簡報</div></div>
+      <div class="stat"><div class="big-num">03</div><div class="lbl">OR-Tools<br>排程 PoC</div></div>
+      <div class="stat"><div class="big-num" style="color:var(--green);">04</div><div class="lbl">ICD<br>介面規格</div></div>
+    </div>
+    <p class="meta" style="margin-top:34px;">near-realtime-scheduling　|　kevinchang0531　|　2026-06-07</p>
+  </section>
+
+  <!-- ── chrome ── -->
+  <div class="counter"><span id="cur">1</span> / <span id="total">13</span></div>
+  <div class="brand">遙測衛星近即時自動化排程系統 · TASA STYLE</div>
+  <div class="nav">
+    <button id="prev">‹</button>
+    <button id="next">›</button>
+  </div>
+</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const total = slides.length;
+  let i = 0;
+  document.getElementById('total').textContent = total;
+  const prog = document.getElementById('progress');
+  const cur = document.getElementById('cur');
+  function show(n){
+    i = Math.max(0, Math.min(total-1, n));
+    slides.forEach((s,k)=>s.classList.toggle('active', k===i));
+    prog.style.width = ((i+1)/total*100)+'%';
+    cur.textContent = i+1;
+  }
+  document.getElementById('next').onclick = ()=>show(i+1);
+  document.getElementById('prev').onclick = ()=>show(i-1);
+  document.addEventListener('keydown', e=>{
+    if(e.key==='ArrowRight'||e.key==='PageDown'||e.key===' ') show(i+1);
+    else if(e.key==='ArrowLeft'||e.key==='PageUp') show(i-1);
+    else if(e.key==='Home') show(0);
+    else if(e.key==='End') show(total-1);
+  });
+  show(0);
+</script>
+</body>
+</html>
